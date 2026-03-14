@@ -19,9 +19,9 @@ const {
 function calculateSessionXP(durationMinutes, noiseLevel) {
   const baseXP = durationMinutes * XP_PER_MINUTE;
 
-  // Find the highest applicable multiplier
+  // Find the highest applicable multiplier (strictly > threshold, per PID spec)
   const { multiplier } = XP_MULTIPLIERS.find(
-    (m) => durationMinutes >= m.minMinutes
+    (m) => durationMinutes > m.minMinutes
   ) || { multiplier: 1.0 };
 
   let xp = Math.round(baseXP * multiplier);

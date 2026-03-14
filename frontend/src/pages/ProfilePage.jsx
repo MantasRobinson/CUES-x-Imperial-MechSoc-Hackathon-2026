@@ -5,6 +5,29 @@ import BadgeGrid        from '../components/Profile/BadgeGrid';
 import LevelProgressBar from '../components/common/LevelProgressBar';
 import { formatDuration } from '../utils/dateHelpers';
 
+function AccountId({ id }) {
+  const [copied, setCopied] = useState(false);
+  if (!id) return null;
+  const handleCopy = () => {
+    navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span className="text-xs text-gray-500 font-mono truncate max-w-[200px]">{id}</span>
+      <button
+        onClick={handleCopy}
+        title="Copy account ID"
+        className="text-xs text-gray-500 hover:text-brand-400 transition-colors shrink-0"
+      >
+        {copied ? '✓ copied' : 'copy'}
+      </button>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
@@ -88,6 +111,7 @@ export default function ProfilePage() {
             <div>
               <h1 className="text-xl font-bold text-white truncate">{u.displayName}</h1>
               <p className="text-sm text-gray-400">{u.email}</p>
+              <AccountId id={u.id} />
               <button className="text-xs text-brand-400 mt-1 hover:underline" onClick={() => setEditing(true)}>
                 Edit profile
               </button>
