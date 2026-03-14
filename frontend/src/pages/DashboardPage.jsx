@@ -10,6 +10,7 @@ import PhoneFreeBarChart from '../components/Charts/PhoneFreeBarChart';
 import XPCurveChart     from '../components/Charts/XPCurveChart';
 import NoisePieChart    from '../components/Charts/NoisePieChart';
 import SessionHistogram from '../components/Charts/SessionHistogram';
+import LiveSession      from '../components/Dashboard/LiveSession';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -22,6 +23,9 @@ export default function DashboardPage() {
   const [period,     setPeriod]     = useState('weekly');
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleSessionEnd = () => setRefreshKey((k) => k + 1);
 
   useEffect(() => {
     Promise.all([
@@ -38,7 +42,7 @@ export default function DashboardPage() {
       })
       .catch(() => setError('Failed to load dashboard data.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     api.get(`/sessions/chart-data?period=${period}`)
@@ -53,6 +57,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Live session animation — appears automatically when phone is in box */}
+      <LiveSession
+        userId={user?.id}
+        userXp={user?.totalXp}
+        userLevel={user?.level}
+        challenges={challenges ? [...(challenges.daily||[]), ...(challenges.weekly||[]), ...(challenges.community||[])] : []}
+        onSessionEnd={handleSessionEnd}
+      />
+
       {/* Motivational message */}
       {dashboard?.motivationalMessage && (
         <div className="card border-l-4 border-brand-500 text-gray-300 text-sm">

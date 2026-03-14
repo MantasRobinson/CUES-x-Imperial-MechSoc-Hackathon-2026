@@ -98,6 +98,14 @@ while true
             char(sessionStartUTC, 'HH:mm:ss'));
         fprintf('         Phone is in the box. Remove for ~5 s to end.\n');
 
+        % Notify the backend so the live dashboard animation appears
+        try
+            opts = weboptions('MediaType', 'application/json', 'Timeout', 5);
+            webwrite([API_URL '/api/sessions/active'], struct('userId', userId), opts);
+        catch
+            % Non-critical — dashboard animation just won't show
+        end
+
     % ── SESSION_END,<sec>,<dist>,<noiseCode> ─────────────────────────────
     elseif startsWith(line, 'SESSION_END')
         sessionEndUTC = datetime('now', 'TimeZone', 'UTC');

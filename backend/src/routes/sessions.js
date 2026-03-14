@@ -17,6 +17,25 @@ const { NOISE_LEVELS } = require('../config/constants');
 
 const router = express.Router();
 
+// In-memory store: userId → { startedAt: Date }
+// Cleared automatically when the session POST arrives.
+const activeSessions = new Map();
+
+// ── GET /api/sessions/active/:userId ───────────────────────────────────────────
+// Frontend polls this to show the live animation.
+router.get('/active/:userId', (req, res) => {
+  const entry = activeSessions.get(req.params.userId);
+  if (entry) return res.json({ active: true,  startedAt: entry.startedAt });
+  return res.json({ active: false, startedAt: null });
+});
+
+// ── POST /api/sessions/active ──────────────────────────────────────────────────
+// MATLAB calls this when SESSION_START fires.
+router.post('/active', [body('userId').isUUID()], validate, (req, res) => {
+  activeSessions.set(req.body.userId, { startedAt: new Date() });
+  res.json({ active: true });
+});
+
 // ── POST /api/sessions ─────────────────────────────────────────────────────────
 // Called by MATLAB via webwrite().  Also usable from the front end (manual entry).
 router.post(
@@ -31,6 +50,7 @@ router.post(
   ],
   validate,
   async (req, res) => {
+    try {
     const {
       userId,
       startTime,
@@ -40,13 +60,20 @@ router.post(
       noiseLevel,
     } = req.body;
 
+    console.log('[sessions] POST body:', { userId, durationMinutes, noiseLevel, disturbanceCount });
+
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
+    // Clear the live-session indicator now that the session is complete
+    activeSessions.delete(userId);
+
     // ── XP calculation ─────────────────────────────────────────────────────
     const { xp, multiplier } = calculateSessionXP(durationMinutes, noiseLevel);
+    console.log('[sessions] xp:', xp, 'multiplier:', multiplier);
 
     // ── Persist session ────────────────────────────────────────────────────
+    console.log('[sessions] Creating session...');
     const session = await Session.create({
       userId,
       startTime,
@@ -59,6 +86,7 @@ router.post(
     });
 
     // ── Update user stats ──────────────────────────────────────────────────
+    console.log('[sessions] Updating user stats...');
     const sessionDate = new Date(startTime).toISOString().slice(0, 10);
     const streakResult = updateStreak(
       {
@@ -87,16 +115,19 @@ router.post(
     });
 
     // ── Badge evaluation ───────────────────────────────────────────────────
+    console.log('[sessions] Checking badges...');
     const stats = await getUserBadgeStats(userId);
     const newBadges = await checkAndAwardBadges(user, session, stats);
 
     // ── Challenge progress ─────────────────────────────────────────────────
+    console.log('[sessions] Updating challenge progress...');
     const completedChallenges = await updateChallengeProgress(userId, {
       durationMinutes,
       noiseLevel,
       disturbanceCount,
     });
 
+    console.log('[sessions] Success — xp:', xp, 'badges:', newBadges.length, 'challenges:', completedChallenges.length);
     return res.status(201).json({
       session,
       xpEarned:           xp,
@@ -109,6 +140,12 @@ router.post(
       newBadges,
       completedChallenges,
     });
+    } catch (err) {
+      console.error('POST /api/sessions FAILED at step above ^^^');
+      console.error('Error:', err.message);
+      console.error('Stack:', err.stack);
+      return res.status(500).json({ error: 'Failed to save session.', detail: err.message });
+    }
   }
 );
 

@@ -34,7 +34,7 @@ async function updateChallengeProgress(userId, session) {
 
   for (const uc of userChallenges) {
     const ch = uc.challenge;
-    const increment = progressIncrement(ch.criteriaType, session);
+    const increment = Math.round(progressIncrement(ch.criteriaType, session));
     if (increment === 0) continue;
 
     uc.progress += increment;
