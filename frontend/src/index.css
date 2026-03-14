@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-950 text-gray-100 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-xl p-5;
+  }
+  .btn-primary {
+    @apply bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-gray-800 hover:bg-gray-700 text-gray-100 font-semibold py-2 px-4 rounded-lg transition-colors;
+  }
+  .input {
+    @apply bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 w-full focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder-gray-500;
+  }
+  .badge-common     { @apply bg-gray-700 text-gray-200; }
+  .badge-uncommon   { @apply bg-green-900 text-green-300; }
+  .badge-rare       { @apply bg-blue-900 text-blue-300; }
+  .badge-epic       { @apply bg-purple-900 text-purple-300; }
+  .badge-legendary  { @apply bg-yellow-900 text-yellow-300; }
+}
