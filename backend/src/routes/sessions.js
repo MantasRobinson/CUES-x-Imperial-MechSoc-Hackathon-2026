@@ -195,10 +195,12 @@ router.get('/chart-data', requireAuth, async (req, res) => {
   const buckets = {};
   for (const s of sessions) {
     const key = s.startTime.toISOString().slice(0, 10);
-    if (!buckets[key]) buckets[key] = { date: key, minutes: 0, xp: 0, sessions: 0 };
+    if (!buckets[key]) buckets[key] = { date: key, minutes: 0, xp: 0, sessions: 0, quietMinutes: 0, moderateMinutes: 0, loudMinutes: 0 };
     buckets[key].minutes  += s.durationMinutes;
     buckets[key].xp       += s.xpEarned;
     buckets[key].sessions += 1;
+    const nf = s.noiseLevel === 'Quiet' ? 'quietMinutes' : s.noiseLevel === 'Loud' ? 'loudMinutes' : 'moderateMinutes';
+    buckets[key][nf] += s.durationMinutes;
   }
 
   // Noise distribution

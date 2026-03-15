@@ -40,6 +40,8 @@ export default function NoisePieChart({ distribution }) {
           <Tooltip
             formatter={(v, name) => [`${v} sessions`, name]}
             contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
+            labelStyle={{ color: '#f3f4f6' }}
+            itemStyle={{ color: '#f3f4f6' }}
           />
           <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
         </PieChart>

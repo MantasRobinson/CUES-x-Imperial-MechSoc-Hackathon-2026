@@ -31,12 +31,12 @@ function AccountId({ id }) {
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
-  const [profile,  setProfile]  = useState(null);
-  const [editing,  setEditing]  = useState(false);
-  const [form,     setForm]     = useState({ displayName: '', showOnLeaderboard: true });
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(true);
+  const [profile,        setProfile]        = useState(null);
+  const [editing,        setEditing]        = useState(false);
+  const [form,           setForm]           = useState({ displayName: '', showOnLeaderboard: true });
+  const [saving,         setSaving]         = useState(false);
+  const [error,          setError]          = useState('');
+  const [loading,        setLoading]        = useState(true);
 
   useEffect(() => {
     api.get('/users/profile')
@@ -65,6 +65,7 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
 
   if (loading) return <p className="text-gray-400 animate-pulse">Loading…</p>;
   if (error)   return <p className="text-red-400">{error}</p>;

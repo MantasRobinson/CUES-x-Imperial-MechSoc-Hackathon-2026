@@ -36,14 +36,16 @@ router.patch(
     body('displayName').optional().trim().isLength({ min: 1, max: 80 }),
     body('avatarUrl').optional().isURL(),
     body('showOnLeaderboard').optional().isBoolean(),
+    body('targetMinutes').optional().isInt({ min: 0, max: 480 }),
   ],
   validate,
   async (req, res) => {
-    const { displayName, avatarUrl, showOnLeaderboard } = req.body;
+    const { displayName, avatarUrl, showOnLeaderboard, targetMinutes } = req.body;
     const updates = {};
     if (displayName        !== undefined) updates.displayName        = displayName;
     if (avatarUrl          !== undefined) updates.avatarUrl          = avatarUrl;
     if (showOnLeaderboard  !== undefined) updates.showOnLeaderboard  = showOnLeaderboard;
+    if (targetMinutes      !== undefined) updates.targetMinutes      = targetMinutes;
 
     await req.user.update(updates);
     res.json({ user: safeUser(req.user) });
@@ -113,14 +115,21 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   });
 });
 
+// ── GET /api/users/:userId/settings  (public — used by MATLAB) ────────────────
+router.get('/:userId/settings', async (req, res) => {
+  const user = await User.findByPk(req.params.userId, { attributes: ['targetMinutes'] });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ targetMinutes: user.targetMinutes ?? 30 });
+});
+
 // ── helpers ────────────────────────────────────────────────────────────────────
 function safeUser(user) {
   const { id, email, displayName, avatarUrl, totalXp, level,
     currentStreak, longestStreak, streakFreezes,
-    totalPhoneFreeMinutes, showOnLeaderboard, createdAt } = user;
+    totalPhoneFreeMinutes, showOnLeaderboard, targetMinutes, createdAt } = user;
   return { id, email, displayName, avatarUrl, totalXp, level,
     currentStreak, longestStreak, streakFreezes,
-    totalPhoneFreeMinutes, showOnLeaderboard, createdAt };
+    totalPhoneFreeMinutes, showOnLeaderboard, targetMinutes, createdAt };
 }
 
 function pickMotivationalMessage(user) {

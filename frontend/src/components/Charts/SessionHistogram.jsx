@@ -17,15 +17,16 @@ export default function SessionHistogram({ histogram }) {
     <div className="card" data-testid="session-histogram">
       <h3 className="font-semibold text-gray-200 mb-3">Session Length Distribution</h3>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 20, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
           <XAxis
             dataKey="bucket"
             tick={{ fill: '#9ca3af', fontSize: 11 }}
-            label={{ value: 'Minutes', position: 'insideBottom', offset: -2, fill: '#6b7280', fontSize: 11 }}
+            label={{ value: 'Minutes', position: 'insideBottom', offset: -10, fill: '#6b7280', fontSize: 11 }}
           />
           <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} allowDecimals={false} />
           <Tooltip
+            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
             formatter={(v) => [`${v} sessions`, 'Count']}
             contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
             labelStyle={{ color: '#e5e7eb' }}

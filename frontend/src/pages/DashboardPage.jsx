@@ -13,7 +13,7 @@ import SessionHistogram from '../components/Charts/SessionHistogram';
 import LiveSession      from '../components/Dashboard/LiveSession';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   const [dashboard,  setDashboard]  = useState(null);
   const [sessions,   setSessions]   = useState([]);
@@ -23,9 +23,24 @@ export default function DashboardPage() {
   const [period,     setPeriod]     = useState('weekly');
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey,     setRefreshKey]     = useState(0);
+  const [targetMinutes,  setTargetMinutes]  = useState(() => user?.targetMinutes ?? 30);
+  const [targetSaved,    setTargetSaved]    = useState(false);
 
-  const handleSessionEnd = () => setRefreshKey((k) => k + 1);
+  const saveTarget = async (val) => {
+    try {
+      const res = await api.patch('/users/profile', { targetMinutes: val });
+      updateUser(res.data.user);
+      setTargetSaved(true);
+      setTimeout(() => setTargetSaved(false), 2000);
+    } catch { /* non-fatal */ }
+  };
+
+  const handleSessionEnd = () => {
+    setRefreshKey((k) => k + 1);
+    // Refresh user context so totalXp is up-to-date for the XP bar animation
+    api.get('/auth/me').then((r) => updateUser(r.data.user)).catch(() => {});
+  };
 
   useEffect(() => {
     Promise.all([
@@ -53,7 +68,9 @@ export default function DashboardPage() {
   if (loading) return <p className="text-gray-400 animate-pulse">Loading…</p>;
   if (error)   return <p className="text-red-400">{error}</p>;
 
-  const lp = dashboard?.levelProgress;
+  const lp      = dashboard?.levelProgress;
+  const isDemo  = targetMinutes === 0;
+  const fillPct = isDemo ? 0 : ((targetMinutes - 5) / (120 - 5)) * 100;
 
   return (
     <div className="space-y-6">
@@ -85,6 +102,7 @@ export default function DashboardPage() {
       {lp && (
         <div className="card">
           <LevelProgressBar
+            key={refreshKey}
             level={lp.level}
             progress={lp.progress}
             currentLevelXP={lp.currentLevelXP}
@@ -93,6 +111,50 @@ export default function DashboardPage() {
           />
         </div>
       )}
+
+      {/* PhoneBox session target */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-gray-200 flex items-center gap-2">
+            📵 Session Target
+          </h2>
+          <span className={`text-sm font-bold ${isDemo ? 'text-yellow-400' : 'text-brand-400'}`}>
+            {isDemo ? '⚡ Demo — 30 s' : `${targetMinutes} min`}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={5} max={120} step={5}
+          value={isDemo ? 5 : targetMinutes}
+          onChange={(e) => setTargetMinutes(Number(e.target.value))}
+          disabled={isDemo}
+          className="slider"
+          style={{ background: `linear-gradient(to right, #3b82f6 ${fillPct}%, #1f2937 ${fillPct}%)` }}
+        />
+        <div className="flex justify-between text-xs text-gray-600 mt-1 mb-3">
+          <span>5 min</span><span>2 h</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => saveTarget(targetMinutes)}
+            disabled={isDemo}
+            className="btn-primary py-1 px-3 text-xs"
+          >
+            {targetSaved ? '✓ Saved' : 'Save'}
+          </button>
+          <button
+            onClick={() => { const n = isDemo ? 30 : 0; setTargetMinutes(n); saveTarget(n); }}
+            className={`py-1 px-3 text-xs rounded-lg font-semibold transition-colors ${
+              isDemo
+                ? 'bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/30'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+            }`}
+          >
+            {isDemo ? '✕ Exit demo' : '⚡ Demo (30 s)'}
+          </button>
+          <p className="text-xs text-gray-600 ml-1">LED fades red → green over this duration</p>
+        </div>
+      </div>
 
       {/* Charts row */}
       <div className="flex gap-3 mb-1">

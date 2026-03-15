@@ -38,34 +38,65 @@ catch err
         'Cannot open %s — check COM_PORT in phonebox_config.m.\n(%s)', ...
         COM_PORT, err.message);
 end
-arduino.Timeout = 10;         % generous timeout — only reached when data is actually expected
 configureTerminator(arduino, "LF");
 flush(arduino);
+pause(1.5);   % wait for any DTR-triggered Arduino reset + PHONEBOX_READY
 
-% Wait for Arduino ready signal
+% Check if PHONEBOX_READY is already in the buffer; proceed immediately if not
 fprintf('Waiting for Arduino...\n');
-for attempt = 1:20
+arduino.Timeout = 1;
+if arduino.NumBytesAvailable > 0
     try
         line = strtrim(readline(arduino));
         if contains(line, 'PHONEBOX_READY')
             fprintf('Arduino ready.\n\n');
-            break;
         end
     catch; end
-    if attempt == 20
-        error('PhoneBox:timeout', ...
-            'Arduino did not respond. Is phonebox.ino uploaded correctly?');
-    end
+else
+    fprintf('(PHONEBOX_READY not seen — Arduino may have booted earlier. Proceeding.)\n\n');
 end
+arduino.Timeout = 10;   % restore normal timeout for session reads
+
+% ── Send target duration to Arduino ───────────────────────────────────────────
+targetMinutes = 30;   % fallback default
+try
+    opts = weboptions('Timeout', 5);
+    settings = webread([API_URL '/api/users/' userId '/settings'], opts);
+    targetMinutes = settings.targetMinutes;
+catch
+    % Non-critical — Arduino will use its built-in default
+end
+writeline(arduino, sprintf('SETTARGET,%d', targetMinutes));
+fprintf('Target   : %d min  (LED turns green at this duration)\n\n', targetMinutes);
 
 fprintf('Place your phone in the box to start a session.\n');
 fprintf('Commands: type  start | stop | quit  then press Enter.\n\n');
 
 noiseLabels     = {'Quiet', 'Moderate', 'Loud'};
 sessionStartUTC = [];
+lastTargetFetch = tic;   % for periodic re-fetch of target
 
 % ── Main loop ─────────────────────────────────────────────────────────────────
 while true
+
+    % ── Re-fetch target every 10 s (picks up website changes in real time) ───
+    if toc(lastTargetFetch) > 10
+        try
+            opts2     = weboptions('Timeout', 3);
+            s2        = webread([API_URL '/api/users/' userId '/settings'], opts2);
+            newTarget = s2.targetMinutes;
+            if newTarget ~= targetMinutes
+                targetMinutes = newTarget;
+                writeline(arduino, sprintf('SETTARGET,%d', targetMinutes));
+                if targetMinutes == 0
+                    fprintf('Target updated: DEMO (30 s)\n');
+                else
+                    fprintf('Target updated: %d min\n', targetMinutes);
+                end
+            end
+        catch; end
+        lastTargetFetch = tic;
+    end
 
     % ── Check for user keyboard command ──────────────────────────────────────
     % input() is blocking in MATLAB, so we use a non-blocking approach:

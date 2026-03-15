@@ -68,6 +68,11 @@ const User = sequelize.define('User', {
     defaultValue: true,
     field: 'show_on_leaderboard',
   },
+  targetMinutes: {
+    type: DataTypes.INTEGER,
+    defaultValue: 30,
+    field: 'target_minutes',
+  },
 }, {
   tableName: 'users',
   timestamps: true,

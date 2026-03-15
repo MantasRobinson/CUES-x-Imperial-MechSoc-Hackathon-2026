@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../../services/api';
 import { calculateSessionXP, levelProgress } from '../../utils/xpCalculator';
 
 const POLL_MS  = 3000;
-const FLASH_MS = 2500;
+const FLASH_MS = 4500;
 
 // Next multiplier milestone above current elapsed minutes
 function nextMilestone(minutes) {
@@ -28,12 +28,68 @@ function nearbyQuests(challenges, elapsedMin) {
     .slice(0, 3);
 }
 
-export default function LiveSession({ userId, userXp, userLevel, challenges, onSessionEnd }) {
-  const [active,     setActive]     = useState(false);
-  const [startedAt,  setStartedAt]  = useState(null);
-  const [elapsed,    setElapsed]    = useState(0);
-  const [completing, setCompleting] = useState(false);
-  const wasActive = useRef(false);
+// XP bar that animates from pre-session to post-session progress
+function CompletionXPBar({ prevLp, nextLp }) {
+  const levellingUp = nextLp.level > prevLp.level;
+  const startPct    = Math.min(100, prevLp.progress * 100);
+  const targetPct   = levellingUp ? 100 : Math.min(100, nextLp.progress * 100);
+  const [displayPct, setDisplayPct] = useState(startPct);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDisplayPct(targetPct), 300);
+    return () => clearTimeout(t);
+  }, [targetPct]);
+
+  return (
+    <div className="w-full max-w-sm space-y-1.5">
+      <div className="flex justify-between text-xs">
+        <span className={levellingUp ? 'text-yellow-400 font-semibold' : 'text-gray-500'}>
+          Level {nextLp.level}{levellingUp ? ' 🎉 Level up!' : ''}
+        </span>
+        <span className="text-gray-600">→ Level {nextLp.level + (levellingUp ? 0 : 1)}</span>
+      </div>
+      <div className="relative w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
+        {/* Pre-session position (dim) */}
+        <div className="absolute h-2.5 rounded-full bg-gray-600"
+          style={{ width: `${startPct.toFixed(1)}%` }} />
+        {/* Animated fill to new position */}
+        <div className="h-2.5 rounded-full bg-brand-500 transition-all duration-[1400ms] ease-out"
+          style={{ width: `${displayPct.toFixed(1)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// Animated sound-wave bars (decorative, visualises that noise is being monitored)
+const BAR_HEIGHTS = [3, 5, 7, 4, 8, 6, 9, 5, 7, 4, 6, 3, 8, 5, 4];
+function SoundBars() {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="flex items-end gap-1">
+        {BAR_HEIGHTS.map((h, i) => (
+          <div key={i}
+            className="w-1.5 rounded-full bg-green-400/50 animate-pulse"
+            style={{
+              height: `${h * 3}px`,
+              animationDelay: `${i * 80}ms`,
+              animationDuration: `${600 + (i % 5) * 150}ms`,
+            }}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-gray-600">Monitoring environment</p>
+    </div>
+  );
+}
+
+export default function LiveSession({ userId, userXp, challenges, onSessionEnd }) {
+  const [active,          setActive]          = useState(false);
+  const [startedAt,       setStartedAt]       = useState(null);
+  const [elapsed,         setElapsed]         = useState(0);
+  const [completing,      setCompleting]      = useState(false);
+  const [completingStats, setCompletingStats] = useState(null);
+  const wasActive  = useRef(false);
+  const elapsedRef = useRef(0);
 
   // ── Poll backend ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -42,6 +98,16 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
       try {
         const { data } = await api.get(`/sessions/active/${userId}`);
         if (!data.active && wasActive.current) {
+          const finalSec = elapsedRef.current;
+          const finalMin = finalSec / 60;
+          const { xp, multiplier } = calculateSessionXP(finalMin, 'Moderate');
+          const mm = String(Math.floor(finalSec / 60)).padStart(2, '0');
+          const ss = String(finalSec % 60).padStart(2, '0');
+          const prevLp = userXp != null ? levelProgress(userXp)       : null;
+          const nextLp = userXp != null ? levelProgress(userXp + xp)  : null;
+          const completedQuests = nearbyQuests(challenges, finalMin)
+            .filter(ch => ch.projected >= ch.criteriaValue);
+          setCompletingStats({ timeStr: `${mm}:${ss}`, xp, multiplier, prevLp, nextLp, completedQuests });
           setCompleting(true);
           setActive(false);
           setTimeout(() => { setCompleting(false); onSessionEnd?.(); }, FLASH_MS);
@@ -57,24 +123,72 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
 
   // ── Elapsed timer ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!active || !startedAt) { setElapsed(0); return; }
+    if (!active || !startedAt) { setElapsed(0); elapsedRef.current = 0; return; }
     const origin = new Date(startedAt).getTime();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - origin) / 1000)), 1000);
+    const id = setInterval(() => {
+      const s = Math.floor((Date.now() - origin) / 1000);
+      setElapsed(s);
+      elapsedRef.current = s;
+    }, 1000);
     return () => clearInterval(id);
   }, [active, startedAt]);
 
   if (!active && !completing) return null;
 
+  // ── Completion card ─────────────────────────────────────────────────────────
   if (completing) {
+    const s = completingStats;
     return (
-      <div className="rounded-2xl bg-gray-900 border border-green-500/40 p-8 flex flex-col items-center gap-3 animate-pulse">
+      <div className="rounded-2xl bg-gray-900 border border-green-500/40 p-8 flex flex-col items-center gap-5">
         <div className="text-5xl">✅</div>
         <p className="text-green-400 font-bold text-xl tracking-wide">Session Complete!</p>
-        <p className="text-gray-400 text-sm">Uploading results…</p>
+
+        {s && (
+          <>
+            {/* Duration + XP */}
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-3xl font-mono font-bold text-white tabular-nums">{s.timeStr}</span>
+                <span className="text-xs text-gray-500 uppercase tracking-wide">Duration</span>
+              </div>
+              <div className="w-px h-10 bg-gray-700" />
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-3xl font-bold text-yellow-400">+{s.xp}</span>
+                <span className="text-xs text-gray-500 uppercase tracking-wide">XP Earned</span>
+                {s.multiplier > 1 && (
+                  <span className="text-xs text-yellow-300 font-semibold">{s.multiplier}× multiplier</span>
+                )}
+              </div>
+            </div>
+
+            {/* Animated XP bar */}
+            {s.prevLp && s.nextLp && (
+              <CompletionXPBar prevLp={s.prevLp} nextLp={s.nextLp} />
+            )}
+
+            {/* Completed challenges */}
+            {s.completedQuests?.length > 0 && (
+              <div className="w-full max-w-sm space-y-2 pt-3 border-t border-gray-800">
+                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide text-center">
+                  Challenges Completed
+                </p>
+                {s.completedQuests.map(ch => (
+                  <div key={ch.id} className="flex justify-between items-center bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                    <span className="text-sm text-green-400 font-medium">✅ {ch.title}</span>
+                    <span className="text-xs text-yellow-400 font-semibold">+{ch.xpReward} XP</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        <p className="text-gray-600 text-xs">Uploading results…</p>
       </div>
     );
   }
 
+  // ── Live session card ───────────────────────────────────────────────────────
   const mm          = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const ss          = String(elapsed % 60).padStart(2, '0');
   const elapsedMin  = elapsed / 60;
@@ -82,7 +196,6 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
   const milestone   = nextMilestone(elapsedMin);
   const quests      = nearbyQuests(challenges, elapsedMin);
 
-  // Level-up progress with projected XP
   const lp          = userXp != null ? levelProgress(userXp + xp) : null;
   const prevLp      = userXp != null ? levelProgress(userXp)      : null;
   const levellingUp = lp && prevLp && lp.level > prevLp.level;
@@ -118,6 +231,9 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
           {mm}:{ss}
         </p>
 
+        {/* Sound-wave visualisation */}
+        <SoundBars />
+
         {/* XP earned + multiplier */}
         <div className="flex items-center gap-3">
           <span className="text-2xl font-bold text-yellow-400">+{xp} XP</span>
@@ -145,10 +261,8 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
               <span>{lp.currentLevelXP} → {lp.nextLevelXP} XP</span>
             </div>
             <div className="relative w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
-              {/* Current progress (dim) */}
               <div className="absolute h-1.5 rounded-full bg-gray-600"
                 style={{ width: `${(prevLp.progress * 100).toFixed(1)}%` }} />
-              {/* Projected progress (bright) */}
               <div className="h-1.5 rounded-full bg-brand-500 transition-all duration-1000"
                 style={{ width: `${Math.min(100, lp.progress * 100).toFixed(1)}%` }} />
             </div>
@@ -160,9 +274,9 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
           <div className="w-full max-w-sm space-y-2 pt-2 border-t border-gray-800/60">
             <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">Quests</p>
             {quests.map(ch => {
-              const pct      = Math.min(100, (ch.projected / ch.criteriaValue) * 100);
-              const prevPct  = Math.min(100, (ch.progress  / ch.criteriaValue) * 100);
-              const done     = ch.projected >= ch.criteriaValue;
+              const pct     = Math.min(100, (ch.projected / ch.criteriaValue) * 100);
+              const prevPct = Math.min(100, (ch.progress  / ch.criteriaValue) * 100);
+              const done    = ch.projected >= ch.criteriaValue;
               return (
                 <div key={ch.id}>
                   <div className="flex justify-between text-xs mb-1">
@@ -172,10 +286,8 @@ export default function LiveSession({ userId, userXp, userLevel, challenges, onS
                     <span className="text-gray-600">+{ch.xpReward} XP</span>
                   </div>
                   <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden relative">
-                    {/* Previous progress */}
                     <div className="absolute h-1.5 rounded-full bg-gray-600"
                       style={{ width: `${prevPct.toFixed(1)}%` }} />
-                    {/* Projected gain (bright) */}
                     <div className={`h-1.5 rounded-full transition-all duration-1000 ${done ? 'bg-green-400' : 'bg-brand-500'}`}
                       style={{ width: `${pct.toFixed(1)}%` }} />
                   </div>
